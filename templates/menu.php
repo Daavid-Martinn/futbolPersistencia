@@ -1,28 +1,30 @@
+<!-- templates/menu.php -->
 <?php
-// templates/header.php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artean | Competición</title>
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
+    <title>FutPersistencia</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-
-<div class="container mt-4">
-
-    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-        <a class="navbar-brand" href="index.php">Competición</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav mr-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="index.php?action=equipos">Equipos</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="index.php?action=partidos">Partidos</a>
-                </li>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <!-- El link de la marca apunta ahora a equipos.php -->
+        <a class="navbar-brand" href="../app/equipos.php">FutPersistencia</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="../app/equipos.php">Equipos</a></li>
+                <li class="nav-item"><a class="nav-link" href="../app/partidos.php">Partidos</a></li>
             </ul>
         </div>
-    </nav>
+    </div>
+</nav>
+<div class="container">

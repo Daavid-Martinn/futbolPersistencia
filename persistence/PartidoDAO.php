@@ -1,68 +1,108 @@
 <?php
-namespace App\Persistence;
-
-use App\Models\Partido;
-use PDO;
-
 class PartidoDAO {
-    private $db;
+    private $conn;
 
-    public function __construct() {
-        $this->db = Connection::getInstance()->getConnection();
+    public function __construct($conn) {
+        $this->conn = $conn;
     }
 
-    public function getPartidosByJornada($jornada) {
-        // Consulta compleja para obtener nombres de equipos
-        $sql = "SELECT p.jornada, e1.nombre AS local, e2.nombre AS visitante, p.resultado, e3.nombre AS estadio
-                FROM partidos p
-                JOIN equipos e1 ON p.equipo_local_id = e1.id
-                JOIN equipos e2 ON p.equipo_visitante_id = e2.id
-                JOIN equipos e3 ON p.estadio_id = e3.id
-                WHERE p.jornada = ? 
-                ORDER BY p.id ASC";
-        
-        $stmt = $this->db->prepare($sql);
+    // Obtiene todos los partidos
+    public function obtenerPartidos() {
+        $stmt = $this->conn->query("
+            SELECT p.id, p.jornada, p.resultado, 
+                   el.nombre AS local, ev.nombre AS visitante,
+                   el.estadio AS estadio
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            ORDER BY p.jornada
+        ");
+        return $stmt->fetchAll();
+    }
+
+    // Obtener jornadas disponibles
+    public function obtenerJornadas() {
+        $stmt = $this->conn->query("SELECT DISTINCT jornada FROM partidos ORDER BY jornada ASC");
+        return array_column($stmt->fetchAll(), 'jornada');
+    }
+
+    // Obtener partidos por jornada
+    public function obtenerPartidosPorJornada($jornada) {
+        $stmt = $this->conn->prepare("
+            SELECT p.id, p.jornada, p.resultado, 
+                   el.nombre AS local, ev.nombre AS visitante,
+                   el.estadio AS estadio
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            WHERE p.jornada = ?
+            ORDER BY p.id
+        ");
         $stmt->execute([$jornada]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC); // Devuelve datos crudos para la vista
-    }
-    
-    public function getJornadas() {
-        $stmt = $this->db->query("SELECT DISTINCT jornada FROM partidos ORDER BY jornada ASC");
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
-    }
-    
-    public function getPartidosByEquipoId($equipoId) {
-        $sql = "SELECT p.jornada, e1.nombre AS local, e2.nombre AS visitante, p.resultado, e3.nombre AS estadio
-                FROM partidos p
-                JOIN equipos e1 ON p.equipo_local_id = e1.id
-                JOIN equipos e2 ON p.equipo_visitante_id = e2.id
-                JOIN equipos e3 ON p.estadio_id = e3.id
-                WHERE p.equipo_local_id = ? OR p.equipo_visitante_id = ?
-                ORDER BY p.jornada ASC";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$equipoId, $equipoId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC); 
+        return $stmt->fetchAll();
     }
 
-    public function save(Partido $partido) {
-        $stmt = $this->db->prepare("INSERT INTO partidos (equipo_local_id, equipo_visitante_id, jornada, resultado, estadio_id) VALUES (?, ?, ?, ?, ?)");
-        return $stmt->execute([
-            $partido->getLocalId(), 
-            $partido->getVisitanteId(), 
-            $partido->getJornada(), 
-            $partido->getResultado(),
-            $partido->getEstadioId()
-        ]);
+    // Validar que los equipos no hayan jugado previamente
+    public function validarPartido($local_id, $visitante_id) {
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(*) as total 
+            FROM partidos 
+            WHERE (equipo_local_id = ? AND equipo_visitante_id = ?)
+               OR (equipo_local_id = ? AND equipo_visitante_id = ?)
+        ");
+        $stmt->execute([$local_id, $visitante_id, $visitante_id, $local_id]);
+        $result = $stmt->fetch();
+        return $result['total'] == 0;
     }
-    
-    public function existePartidoPrevio($localId, $visitanteId) {
-        // Comprobar si ya han jugado al menos una vez (local vs visitante o viceversa)
-        $sql = "SELECT COUNT(*) FROM partidos 
-                WHERE (equipo_local_id = ? AND equipo_visitante_id = ?) 
-                   OR (equipo_local_id = ? AND equipo_visitante_id = ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$localId, $visitanteId, $visitanteId, $localId]);
-        return $stmt->fetchColumn() > 0;
+
+    // Insertar nuevo partido
+    public function insertarPartido($equipo_local_id, $equipo_visitante_id, $resultado, $jornada) {
+        // Tomamos el estadio del equipo local
+        $stmt = $this->conn->prepare("SELECT id FROM equipos WHERE id = ?");
+        $stmt->execute([$equipo_local_id]);
+        $equipo_local = $stmt->fetch();
+
+        if (!$equipo_local) {
+            throw new Exception("El equipo local con ID $equipo_local_id no existe.");
+        }
+
+        $estadio_id = $equipo_local['id'];
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO partidos (equipo_local_id, equipo_visitante_id, resultado, jornada, estadio_id)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$equipo_local_id, $equipo_visitante_id, $resultado, $jornada, $estadio_id]);
+    }
+
+    // Obtener un partido por ID
+    public function obtenerPartidoPorId($id) {
+        $stmt = $this->conn->prepare("
+            SELECT p.id, p.jornada, p.resultado, 
+                   el.nombre AS local, ev.nombre AS visitante,
+                   el.estadio AS estadio
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            WHERE p.id = ?
+        ");
+        $stmt->execute([$id]);
+        return $stmt->fetch();
+    }
+
+    // NUEVA FUNCIÓN: Obtener todos los partidos de un equipo (local o visitante)
+    public function obtenerPartidosPorEquipo($equipo_id) {
+        $stmt = $this->conn->prepare("
+            SELECT p.id, p.jornada, p.resultado, 
+                   el.nombre AS local, ev.nombre AS visitante,
+                   el.estadio AS estadio
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            WHERE p.equipo_local_id = ? OR p.equipo_visitante_id = ?
+            ORDER BY p.jornada, p.id
+        ");
+        $stmt->execute([$equipo_id, $equipo_id]);
+        return $stmt->fetchAll();
     }
 }
