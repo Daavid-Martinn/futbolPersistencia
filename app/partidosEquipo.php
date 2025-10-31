@@ -1,8 +1,11 @@
 <?php
+session_start();
+
 require_once '../templates/menu.php';
 require_once '../persistence/PartidoDAO.php';
 require_once '../persistence/Connection.php';
 
+// Obtener el ID del equipo desde GET
 $equipo_id = $_GET['id'] ?? null;
 
 if (!$equipo_id) {
@@ -10,10 +13,13 @@ if (!$equipo_id) {
     exit;
 }
 
+// Guardamos el equipo en sesión para que la página principal lo recuerde
+$_SESSION['equipo_actual'] = $equipo_id;
+
 $conn = new Connection();
 $daoP = new PartidoDAO($conn->getConnection());
 
-// Obtener partidos del equipo
+// Obtener todos los partidos del equipo (local o visitante)
 $partidos = $daoP->obtenerPartidosPorEquipo($equipo_id);
 ?>
 
